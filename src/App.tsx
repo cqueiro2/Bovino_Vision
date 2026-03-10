@@ -23,7 +23,8 @@ import History from './components/History';
 
 export default function App() {
   const [view, setView] = useState<ViewMode>('dashboard');
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isSidebarOpen, setSidebarOpen] = useState(false); // Default closed on mobile
+  const [isDesktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
 
   const navItems = [
     { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
@@ -34,29 +35,55 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex text-[#1A1A1A] font-sans">
-      {/* Sidebar */}
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar (Mobile & Desktop) */}
       <aside 
-        className={`bg-white border-r border-gray-200 transition-all duration-300 flex flex-col ${
-          isSidebarOpen ? 'w-64' : 'w-20'
+        className={`fixed lg:static inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 flex flex-col ${
+          isSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'
+        } ${
+          isDesktopSidebarOpen ? 'lg:w-64' : 'lg:w-20'
         }`}
       >
-        <div className="p-6 flex items-center gap-3 border-b border-gray-100">
-          <div className="bg-emerald-800 p-2 rounded-lg">
-            <Activity className="text-white w-6 h-6" />
-          </div>
-          {isSidebarOpen && (
-            <div className="flex flex-col">
-              <span className="font-black text-lg leading-tight tracking-tight text-emerald-900">Bovino Vision AI</span>
-              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Monitoramento Inteligente</span>
+        <div className="p-6 flex items-center justify-between border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-800 p-2 rounded-lg">
+              <Activity className="text-white w-6 h-6" />
             </div>
-          )}
+            {(isSidebarOpen || isDesktopSidebarOpen) && (
+              <div className="flex flex-col">
+                <span className="font-black text-lg leading-tight tracking-tight text-emerald-900">Bovino Vision</span>
+                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Monitoramento</span>
+              </div>
+            )}
+          </div>
+          <button 
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden p-2 text-gray-400 hover:bg-gray-50 rounded-lg"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
           {navItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setView(item.id as ViewMode)}
+              onClick={() => {
+                setView(item.id as ViewMode);
+                setSidebarOpen(false);
+              }}
               className={`w-full flex items-center gap-3 p-3 rounded-2xl transition-all ${
                 view === item.id 
                   ? 'bg-emerald-50 text-emerald-800 font-bold shadow-sm' 
@@ -64,30 +91,38 @@ export default function App() {
               }`}
             >
               <item.icon className="w-5 h-5" />
-              {isSidebarOpen && <span>{item.label}</span>}
+              {(isSidebarOpen || isDesktopSidebarOpen) && <span>{item.label}</span>}
             </button>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-gray-100">
+        <div className="p-4 border-t border-gray-100 hidden lg:block">
           <button 
-            onClick={() => setSidebarOpen(!isSidebarOpen)}
+            onClick={() => setDesktopSidebarOpen(!isDesktopSidebarOpen)}
             className="w-full flex items-center justify-center p-3 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-xl transition-all"
           >
-            {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {isDesktopSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden w-full">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-8">
-          <h2 className="text-xl font-bold text-gray-800">
-            {navItems.find(i => i.id === view)?.label}
-          </h2>
+        <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-8">
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100">
+            <button 
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 text-gray-600 hover:bg-gray-50 rounded-lg"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <h2 className="text-xl font-bold text-gray-800">
+              {navItems.find(i => i.id === view)?.label}
+            </h2>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100">
               <CheckCircle2 className="w-4 h-4" />
               SISTEMA ONLINE
             </div>
@@ -98,7 +133,7 @@ export default function App() {
         </header>
 
         {/* View Content */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={view}
@@ -106,7 +141,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="h-full"
+              className="h-full max-w-7xl mx-auto"
             >
               {view === 'dashboard' && <Dashboard />}
               {view === 'analysis' && <ImageAnalysis />}

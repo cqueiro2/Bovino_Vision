@@ -72,32 +72,32 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Summary Header */}
-      <div className="bg-emerald-600 rounded-[32px] p-8 text-white shadow-xl shadow-emerald-100 relative overflow-hidden">
-        <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+      <div className="bg-emerald-600 rounded-[32px] p-6 md:p-8 text-white shadow-xl shadow-emerald-100 relative overflow-hidden">
+        <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-center">
           <div>
-            <h2 className="text-lg font-medium opacity-80 mb-1">Peso Total Acumulado</h2>
+            <h2 className="text-base md:text-lg font-medium opacity-80 mb-1">Peso Total Acumulado</h2>
             <div className="flex items-baseline gap-3">
-              <span className="text-6xl font-black tracking-tighter">{totalWeight.toLocaleString()}</span>
-              <span className="text-2xl font-bold opacity-70">kg</span>
+              <span className="text-4xl md:text-6xl font-black tracking-tighter">{totalWeight.toLocaleString()}</span>
+              <span className="text-xl md:text-2xl font-bold opacity-70">kg</span>
             </div>
-            <p className="text-emerald-100/60 text-sm mt-2 font-medium">Baseado em {analyses.length} análises individuais</p>
+            <p className="text-emerald-100/60 text-xs md:text-sm mt-2 font-medium">Baseado em {analyses.length} análises individuais</p>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
-              <p className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-1">Total Arrobas (@)</p>
-              <p className="text-3xl font-black tracking-tight">{totalArrobas.toFixed(1)}</p>
-              <p className="text-[10px] opacity-40 mt-1">1@ = 15kg</p>
+          <div className="grid grid-cols-2 gap-3 md:gap-4">
+            <div className="bg-white/10 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-white/10">
+              <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest opacity-60 mb-1">Total Arrobas (@)</p>
+              <p className="text-2xl md:text-3xl font-black tracking-tight">{totalArrobas.toFixed(1)}</p>
+              <p className="text-[9px] opacity-40 mt-1">1@ = 15kg</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
-              <p className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-1">Estimativa Carcaça</p>
-              <p className="text-3xl font-black tracking-tight">{carcassArrobas.toFixed(1)}</p>
-              <p className="text-[10px] opacity-40 mt-1">@ Líquida (50%)</p>
+            <div className="bg-white/10 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-white/10">
+              <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest opacity-60 mb-1">Estimativa Carcaça</p>
+              <p className="text-2xl md:text-3xl font-black tracking-tight">{carcassArrobas.toFixed(1)}</p>
+              <p className="text-[9px] opacity-40 mt-1">@ Líquida (50%)</p>
             </div>
           </div>
         </div>
-        <div className="absolute top-0 right-0 -translate-y-1/4 translate-x-1/4 opacity-10">
-          <Scale className="w-96 h-96" />
+        <div className="absolute top-0 right-0 -translate-y-1/4 translate-x-1/4 opacity-10 pointer-events-none">
+          <Scale className="w-64 h-64 md:w-96 md:h-96" />
         </div>
       </div>
 
