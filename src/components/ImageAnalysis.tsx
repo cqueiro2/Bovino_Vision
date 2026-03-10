@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
   Camera, 
@@ -14,7 +14,8 @@ import {
   FileText,
   Info,
   Scale,
-  Target
+  Target,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeBovineImage } from '../services/gemini';
@@ -28,6 +29,10 @@ export default function ImageAnalysis() {
   const [result, setResult] = useState<BovineAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isVideoMode, setIsVideoMode] = useState(false);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -39,15 +44,67 @@ export default function ImageAnalysis() {
         setResult(null);
         setError(null);
         setSaveSuccess(false);
+        setIsVideoMode(false);
       };
       reader.readAsDataURL(file);
     }
   }, []);
 
-  const { getRootProps, getInputProps } = useDropzone({
+  const { getRootProps, getInputProps, open } = useDropzone({
     onDrop,
-    multiple: false
+    multiple: false,
+    noClick: true // We'll trigger it manually or via the main area
   } as any);
+
+  const startCamera = async () => {
+    setIsVideoMode(true);
+    setImage(null);
+    setResult(null);
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      setError("Não foi possível acessar a câmera. Verifique as permissões.");
+      setIsVideoMode(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsVideoMode(false);
+  };
+
+  const captureFrame = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const base64 = canvas.toDataURL('image/jpeg');
+        setImage(base64);
+        stopCamera();
+      }
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (isVideoMode) stopCamera();
+    };
+  }, [isVideoMode]);
 
   const handleAnalyze = async () => {
     if (!image) return;
@@ -242,8 +299,12 @@ export default function ImageAnalysis() {
   return (
     <div className="max-w-2xl mx-auto h-full flex flex-col">
       <div className="flex-1 relative rounded-[40px] overflow-hidden bg-black shadow-2xl border-4 border-white/10 group">
-        {!image ? (
-          <div {...getRootProps()} className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
+        {!image && !isVideoMode ? (
+          <div 
+            {...getRootProps()} 
+            onClick={() => open()}
+            className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer"
+          >
             <input {...getInputProps()} />
             <div className="absolute inset-0 opacity-40">
               <img 
@@ -271,10 +332,47 @@ export default function ImageAnalysis() {
               <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.5)]" />
             </div>
           </div>
+        ) : isVideoMode ? (
+          <div className="absolute inset-0 bg-black">
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              className="w-full h-full object-cover"
+            />
+            <canvas ref={canvasRef} className="hidden" />
+            
+            <div className="absolute top-8 right-8">
+              <button 
+                onClick={stopCamera}
+                className="p-3 bg-white/20 backdrop-blur-xl rounded-full text-white border border-white/30 hover:bg-white/30"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="absolute bottom-12 left-0 right-0 flex justify-center">
+              <button 
+                onClick={captureFrame}
+                className="w-20 h-20 bg-white rounded-full border-8 border-white/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
+              >
+                <div className="w-12 h-12 bg-emerald-500 rounded-full" />
+              </button>
+            </div>
+
+            {/* Camera Overlays */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute top-1/4 left-12 w-16 h-16 border-t-4 border-l-4 border-white/40 rounded-tl-3xl" />
+              <div className="absolute top-1/4 right-12 w-16 h-16 border-t-4 border-r-4 border-white/40 rounded-tr-3xl" />
+              <div className="absolute bottom-1/4 left-12 w-16 h-16 border-b-4 border-l-4 border-white/40 rounded-bl-3xl" />
+              <div className="absolute bottom-1/4 right-12 w-16 h-16 border-b-4 border-r-4 border-white/40 rounded-br-3xl" />
+              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.5)]" />
+            </div>
+          </div>
         ) : (
           <div className="absolute inset-0">
             <img 
-              src={image} 
+              src={image!} 
               alt="Preview" 
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
@@ -312,18 +410,26 @@ export default function ImageAnalysis() {
         <div className="absolute top-8 left-1/2 -translate-x-1/2">
           <div className="bg-black/40 backdrop-blur-xl border border-white/20 px-6 py-2 rounded-full flex items-center gap-2">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            <span className="text-[10px] font-black text-white uppercase tracking-widest">Sistema Pronto para Análise</span>
+            <span className="text-[10px] font-black text-white uppercase tracking-widest">
+              {isVideoMode ? "Câmera Ativa" : "Sistema Pronto para Análise"}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Bottom Controls */}
       <div className="mt-8 grid grid-cols-2 gap-4">
-        <button className="bg-emerald-900/10 border border-emerald-900/20 p-4 rounded-3xl flex items-center justify-center gap-3 hover:bg-emerald-900/20 transition-all">
+        <button 
+          onClick={() => open()}
+          className="bg-emerald-900/10 border border-emerald-900/20 p-4 rounded-3xl flex items-center justify-center gap-3 hover:bg-emerald-900/20 transition-all"
+        >
           <ImageIcon className="w-6 h-6 text-emerald-900" />
           <span className="font-bold text-emerald-900">Galeria</span>
         </button>
-        <button className="bg-gray-100 border border-gray-200 p-4 rounded-3xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-all">
+        <button 
+          onClick={startCamera}
+          className="bg-gray-100 border border-gray-200 p-4 rounded-3xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-all"
+        >
           <Video className="w-6 h-6 text-gray-600" />
           <span className="font-bold text-gray-600">Vídeo</span>
         </button>
