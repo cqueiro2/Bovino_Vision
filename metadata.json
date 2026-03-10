@@ -1,0 +1,5 @@
+{
+  "name": "Bovino Vision AI",
+  "description": "Sistema avançado de análise visual especializado em bovinos para identificação de raça, estimativa de peso e monitoramento de saúde.",
+  "requestFramePermissions": ["camera"]
+}
