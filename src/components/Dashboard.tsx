@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   TrendingUp, 
   AlertTriangle, 
@@ -6,7 +6,8 @@ import {
   Activity,
   Users,
   Scale,
-  Calendar
+  Calendar,
+  Loader2
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -19,27 +20,87 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-
-const data = [
-  { name: 'Seg', peso: 520, saude: 95 },
-  { name: 'Ter', peso: 522, saude: 94 },
-  { name: 'Qua', peso: 525, saude: 96 },
-  { name: 'Qui', peso: 528, saude: 95 },
-  { name: 'Sex', peso: 530, saude: 97 },
-  { name: 'Sab', peso: 535, saude: 98 },
-  { name: 'Dom', peso: 540, saude: 98 },
-];
+import { getAllAnalyses, SavedAnalysis } from '../services/db';
 
 export default function Dashboard() {
+  const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const data = await getAllAnalyses();
+        setAnalyses(data);
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const totalWeight = analyses.reduce((sum, a) => sum + a.peso_estimado, 0);
+  const avgWeight = analyses.length > 0 ? totalWeight / analyses.length : 0;
+  const totalArrobas = totalWeight / 15; // Standard mathematical conversion: 1@ = 15kg
+  const carcassArrobas = totalWeight / 30; // Practical conversion for live cattle (50% yield)
+  const healthAlerts = analyses.filter(a => a.saude_geral !== 'Saudável').length;
+
+  // Prepare chart data from last 7 entries or grouped by day
+  const chartData = [...analyses].reverse().slice(-7).map(a => ({
+    name: new Date(a.created_at).toLocaleDateString('pt-BR', { weekday: 'short' }),
+    peso: a.peso_estimado,
+    saude: a.saude_geral === 'Saudável' ? 100 : a.saude_geral === 'Atenção' ? 70 : 40
+  }));
+
   const stats = [
-    { label: 'Total do Rebanho', value: '124', icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Peso Médio', value: '540 kg', icon: Scale, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Alertas de Saúde', value: '03', icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50' },
-    { label: 'Previsão Abate', value: '12 dias', icon: Calendar, color: 'text-orange-600', bg: 'bg-orange-50' },
+    { label: 'Total do Rebanho', value: analyses.length.toString(), icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Peso Total (@)', value: `${totalArrobas.toFixed(1)} @`, icon: Scale, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Arrobas Carcaça', value: `${carcassArrobas.toFixed(1)} @`, icon: Activity, color: 'text-purple-600', bg: 'bg-purple-50' },
+    { label: 'Alertas de Saúde', value: healthAlerts.toString().padStart(2, '0'), icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50' },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96">
+        <Loader2 className="w-12 h-12 text-emerald-600 animate-spin mb-4" />
+        <p className="text-gray-500 font-medium">Carregando dados do rebanho...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
+      {/* Summary Header */}
+      <div className="bg-emerald-600 rounded-[32px] p-8 text-white shadow-xl shadow-emerald-100 relative overflow-hidden">
+        <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div>
+            <h2 className="text-lg font-medium opacity-80 mb-1">Peso Total Acumulado</h2>
+            <div className="flex items-baseline gap-3">
+              <span className="text-6xl font-black tracking-tighter">{totalWeight.toLocaleString()}</span>
+              <span className="text-2xl font-bold opacity-70">kg</span>
+            </div>
+            <p className="text-emerald-100/60 text-sm mt-2 font-medium">Baseado em {analyses.length} análises individuais</p>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-1">Total Arrobas (@)</p>
+              <p className="text-3xl font-black tracking-tight">{totalArrobas.toFixed(1)}</p>
+              <p className="text-[10px] opacity-40 mt-1">1@ = 15kg</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-1">Estimativa Carcaça</p>
+              <p className="text-3xl font-black tracking-tight">{carcassArrobas.toFixed(1)}</p>
+              <p className="text-[10px] opacity-40 mt-1">@ Líquida (50%)</p>
+            </div>
+          </div>
+        </div>
+        <div className="absolute top-0 right-0 -translate-y-1/4 translate-x-1/4 opacity-10">
+          <Scale className="w-96 h-96" />
+        </div>
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, i) => (
@@ -59,47 +120,61 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-semibold text-gray-800">Evolução de Peso Médio (kg)</h3>
-            <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
-              <TrendingUp className="w-4 h-4" />
-              +3.8% este mês
-            </div>
+            <h3 className="font-semibold text-gray-800">Evolução de Peso (Últimas Análises)</h3>
+            {analyses.length > 1 && (
+              <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
+                <TrendingUp className="w-4 h-4" />
+                Monitoramento Ativo
+              </div>
+            )}
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
-                <defs>
-                  <linearGradient id="colorPeso" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} domain={['dataMin - 10', 'dataMax + 10']} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                />
-                <Area type="monotone" dataKey="peso" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorPeso)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorPeso" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Area type="monotone" dataKey="peso" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorPeso)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
+                Dados insuficientes para gerar gráfico
+              </div>
+            )}
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-          <h3 className="font-semibold text-gray-800 mb-6">Índice de Saúde do Rebanho (%)</h3>
+          <h3 className="font-semibold text-gray-800 mb-6">Status de Saúde Individual</h3>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} domain={[90, 100]} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                />
-                <Line type="monotone" dataKey="saude" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4, fill: '#3b82f6' }} />
-              </LineChart>
-            </ResponsiveContainer>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} domain={[0, 100]} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Line type="monotone" dataKey="saude" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4, fill: '#3b82f6' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
+                Dados insuficientes para gerar gráfico
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -110,25 +185,26 @@ export default function Dashboard() {
           <h3 className="font-semibold text-gray-800">Análises Recentes</h3>
         </div>
         <div className="divide-y divide-gray-100">
-          {[
-            { action: 'Identificação de Raça: Nelore', animal: 'ID #BV-9842', time: '10 min atrás', status: 'success' },
-            { action: 'Alerta de Saúde: Score Baixo', animal: 'ID #BV-7721', time: '2 horas atrás', status: 'warning' },
-            { action: 'Estimativa de Peso Concluída', animal: 'ID #BV-1029', time: '5 horas atrás', status: 'info' },
-          ].map((item, i) => (
+          {analyses.slice(0, 5).map((item, i) => (
             <div key={i} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
               <div className="flex items-center gap-4">
                 <div className={`w-2 h-2 rounded-full ${
-                  item.status === 'success' ? 'bg-emerald-500' : 
-                  item.status === 'warning' ? 'bg-amber-500' : 'bg-blue-500'
+                  item.saude_geral === 'Saudável' ? 'bg-emerald-500' : 
+                  item.saude_geral === 'Atenção' ? 'bg-amber-500' : 'bg-red-500'
                 }`} />
                 <div>
-                  <p className="font-medium text-gray-900">{item.action}</p>
-                  <p className="text-sm text-gray-500">{item.animal}</p>
+                  <p className="font-medium text-gray-900">{item.raca}</p>
+                  <p className="text-sm text-gray-500">ID #{item.id.slice(0, 8)} • {item.peso_estimado} kg</p>
                 </div>
               </div>
-              <span className="text-sm text-gray-400">{item.time}</span>
+              <span className="text-sm text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
             </div>
           ))}
+          {analyses.length === 0 && (
+            <div className="p-8 text-center text-gray-500 italic">
+              Nenhuma análise realizada ainda.
+            </div>
+          )}
         </div>
       </div>
     </div>
