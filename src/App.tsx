@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   Camera, 
-  History, 
+  History as HistoryIcon, 
   Settings, 
   Activity,
   Menu, 
@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ViewMode } from './types';
 import Dashboard from './components/Dashboard';
 import ImageAnalysis from './components/ImageAnalysis';
+import History from './components/History';
 
 export default function App() {
   const [view, setView] = useState<ViewMode>('dashboard');
@@ -27,7 +28,7 @@ export default function App() {
   const navItems = [
     { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
     { id: 'analysis', label: 'Análise', icon: Camera },
-    { id: 'history', label: 'Histórico', icon: History },
+    { id: 'history', label: 'Histórico', icon: HistoryIcon },
     { id: 'settings', label: 'Ajustes', icon: Settings },
   ];
 
@@ -109,13 +110,7 @@ export default function App() {
             >
               {view === 'dashboard' && <Dashboard />}
               {view === 'analysis' && <ImageAnalysis />}
-              {view === 'history' && (
-                <div className="bg-white p-12 rounded-[32px] border border-gray-200 shadow-sm text-center max-w-md mx-auto mt-12">
-                  <History className="w-16 h-16 text-gray-200 mx-auto mb-6" />
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Histórico Vazio</h3>
-                  <p className="text-gray-500">Suas análises salvas aparecerão aqui para acompanhamento da evolução do rebanho.</p>
-                </div>
-              )}
+              {view === 'history' && <History />}
               {view === 'settings' && (
                 <div className="bg-white p-8 rounded-[32px] border border-gray-200 shadow-sm max-w-2xl mx-auto">
                   <h3 className="text-2xl font-bold mb-8">Ajustes do Sistema</h3>

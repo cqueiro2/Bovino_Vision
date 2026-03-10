@@ -18,13 +18,16 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeBovineImage } from '../services/gemini';
+import { saveAnalysis } from '../services/db';
 import { BovineAnalysisResult } from '../types';
 
 export default function ImageAnalysis() {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [result, setResult] = useState<BovineAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -35,6 +38,7 @@ export default function ImageAnalysis() {
         setImage(base64);
         setResult(null);
         setError(null);
+        setSaveSuccess(false);
       };
       reader.readAsDataURL(file);
     }
@@ -49,6 +53,7 @@ export default function ImageAnalysis() {
     if (!image) return;
     setIsAnalyzing(true);
     setError(null);
+    setSaveSuccess(false);
     try {
       const base64Data = image.split(',')[1];
       const analysisResult = await analyzeBovineImage(base64Data);
@@ -58,6 +63,21 @@ export default function ImageAnalysis() {
       setError("Falha ao analisar a imagem. Verifique sua conexão e tente novamente.");
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!result || !image) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      await saveAnalysis(result, image);
+      setSaveSuccess(true);
+    } catch (err) {
+      console.error(err);
+      setError("Falha ao salvar no banco de dados.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -71,7 +91,10 @@ export default function ImageAnalysis() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <button 
-            onClick={() => setResult(null)}
+            onClick={() => {
+              setResult(null);
+              setSaveSuccess(false);
+            }}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
             <ChevronLeft className="w-6 h-6" />
@@ -182,15 +205,36 @@ export default function ImageAnalysis() {
 
         {/* Actions */}
         <div className="space-y-3 pt-4">
-          <button className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-all">
-            <Save className="w-5 h-5" />
-            Salvar no Rebanho
+          <button 
+            onClick={handleSave}
+            disabled={isSaving || saveSuccess}
+            className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg transition-all ${
+              saveSuccess 
+                ? 'bg-emerald-100 text-emerald-700 cursor-default' 
+                : 'bg-emerald-500 text-white shadow-emerald-200 hover:bg-emerald-600 active:scale-95 disabled:opacity-50'
+            }`}
+          >
+            {isSaving ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : saveSuccess ? (
+              <CheckCircle2 className="w-5 h-5" />
+            ) : (
+              <Save className="w-5 h-5" />
+            )}
+            {saveSuccess ? 'Salvo no Rebanho' : 'Salvar no Rebanho'}
           </button>
           <button className="w-full bg-white text-gray-900 py-4 rounded-2xl font-bold flex items-center justify-center gap-3 border border-gray-200 hover:bg-gray-50 transition-all">
             <FileText className="w-5 h-5" />
             Exportar Relatório PDF
           </button>
         </div>
+
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-700">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <p className="text-sm font-medium">{error}</p>
+          </div>
+        )}
       </motion.div>
     );
   }
