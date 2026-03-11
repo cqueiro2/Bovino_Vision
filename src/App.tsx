@@ -38,13 +38,13 @@ export default function App() {
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setSidebarOpen(false)}
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm"
-          />
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 bg-[rgba(0,0,0,0.5)] z-40 lg:hidden backdrop-blur-sm"
+            />
         )}
       </AnimatePresence>
 
@@ -150,7 +150,7 @@ export default function App() {
                 <div className="bg-white p-8 rounded-[32px] border border-gray-200 shadow-sm max-w-2xl mx-auto">
                   <h3 className="text-2xl font-bold mb-8">Ajustes do Sistema</h3>
                   <div className="space-y-6">
-                    <div className="flex items-center justify-between p-6 border border-gray-100 rounded-3xl bg-gray-50/50">
+                    <div className="flex items-center justify-between p-6 border border-gray-100 rounded-3xl bg-[#f9fafb]">
                       <div>
                         <p className="font-bold text-gray-900">Notificações Inteligentes</p>
                         <p className="text-sm text-gray-500">Alertas automáticos de saúde e peso</p>
@@ -159,7 +159,7 @@ export default function App() {
                         <div className="absolute right-1 top-1 w-6 h-6 bg-white rounded-full shadow-sm" />
                       </div>
                     </div>
-                    <div className="flex items-center justify-between p-6 border border-gray-100 rounded-3xl bg-gray-50/50">
+                    <div className="flex items-center justify-between p-6 border border-gray-100 rounded-3xl bg-[#f9fafb]">
                       <div>
                         <p className="font-bold text-gray-900">Integração WhatsApp</p>
                         <p className="text-sm text-gray-500">Receba relatórios diretamente no seu número</p>

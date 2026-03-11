@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   History as HistoryIcon, 
   Trash2, 
@@ -8,20 +8,28 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-  X
+  X,
+  Download,
+  FileText,
+  Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getAllAnalyses, deleteAnalysis, updateAnalysis, SavedAnalysis } from '../services/db';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function History() {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAnalysis, setSelectedAnalysis] = useState<SavedAnalysis | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<SavedAnalysis>>({});
+  
+  const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchAnalyses();
@@ -60,6 +68,63 @@ export default function History() {
       setIsEditing(false);
     } catch (err) {
       alert("Falha ao atualizar.");
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!reportRef.current || !selectedAnalysis) return;
+    
+    setIsExporting(true);
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#FFFFFF',
+        onclone: (clonedDoc) => {
+          const style = clonedDoc.createElement('style');
+          style.innerHTML = `
+            * {
+              color: inherit !important;
+              background-color: inherit !important;
+              border-color: rgba(0,0,0,0.1) !important;
+              box-shadow: none !important;
+              text-shadow: none !important;
+              backdrop-filter: none !important;
+              -webkit-backdrop-filter: none !important;
+            }
+            .text-gray-900 { color: #111827 !important; }
+            .text-gray-800 { color: #1f2937 !important; }
+            .text-gray-700 { color: #374151 !important; }
+            .text-gray-600 { color: #4b5563 !important; }
+            .text-gray-500 { color: #6b7280 !important; }
+            .text-gray-400 { color: #9ca3af !important; }
+            .bg-white { background-color: #ffffff !important; }
+            .bg-emerald-100 { background-color: #d1fae5 !important; }
+            .bg-amber-100 { background-color: #fef3c7 !important; }
+            .bg-red-100 { background-color: #fee2e2 !important; }
+          `;
+          clonedDoc.head.appendChild(style);
+        }
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 10;
+      
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      pdf.save(`laudo-bovino-${selectedAnalysis.id.slice(0, 8)}.pdf`);
+    } catch (err) {
+      console.error("Error generating PDF:", err);
+      alert("Falha ao gerar o PDF.");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -129,7 +194,7 @@ export default function History() {
                 <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button 
                     onClick={(e) => handleDelete(analysis.id, e)}
-                    className="p-2 bg-white/90 backdrop-blur-sm rounded-full text-red-500 hover:bg-red-50"
+                    className="p-2 bg-[rgba(255,255,255,0.9)] backdrop-blur-sm rounded-full text-red-500 hover:bg-red-50"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -170,7 +235,7 @@ export default function History() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedAnalysis(null)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-[rgba(0,0,0,0.6)] backdrop-blur-sm"
             />
             <motion.div 
               layoutId={selectedAnalysis.id}
@@ -183,7 +248,7 @@ export default function History() {
                 <X className="w-6 h-6" />
               </button>
 
-              <div className="grid grid-cols-1 md:grid-cols-2">
+              <div ref={reportRef} className="grid grid-cols-1 md:grid-cols-2">
                 <div className="h-64 md:h-auto">
                   <img 
                     src={selectedAnalysis.image_data} 
@@ -256,7 +321,7 @@ export default function History() {
                     <p className="text-gray-600 leading-relaxed">{selectedAnalysis.descricao_detalhada}</p>
                   </div>
 
-                  <div className="pt-8 border-t border-gray-100 flex gap-4">
+                  <div className="pt-8 border-t border-gray-100 flex flex-wrap gap-4">
                     {isEditing ? (
                       <>
                         <button 
@@ -267,7 +332,7 @@ export default function History() {
                         </button>
                         <button 
                           onClick={handleUpdate}
-                          className="flex-1 bg-emerald-500 text-white py-4 rounded-2xl font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-200"
+                          className="flex-1 bg-emerald-500 text-white py-4 rounded-2xl font-bold hover:bg-emerald-600 transition-all shadow-lg"
                         >
                           Salvar Alterações
                         </button>
@@ -276,14 +341,18 @@ export default function History() {
                       <>
                         <button 
                           onClick={startEditing}
-                          className="flex-1 bg-gray-100 text-gray-600 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200 transition-all"
+                          className="flex-1 min-w-[140px] bg-gray-100 text-gray-600 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200 transition-all"
                         >
                           <Edit3 className="w-5 h-5" />
-                          Editar Dados
+                          Editar
                         </button>
-                        <button className="flex-1 bg-emerald-500 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-200">
-                          <ExternalLink className="w-5 h-5" />
-                          Ver Laudo
+                        <button 
+                          onClick={handleExportPDF}
+                          disabled={isExporting}
+                          className="flex-1 min-w-[140px] bg-emerald-500 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg disabled:opacity-50"
+                        >
+                          {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                          Laudo PDF
                         </button>
                       </>
                     )}
