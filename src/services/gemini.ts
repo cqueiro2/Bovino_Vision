@@ -23,12 +23,14 @@ export async function analyzeBovineImage(base64Image: string): Promise<BovineAna
         {
           text: `Você é um sistema avançado de análise visual especializado em bovinos.
           Analise a imagem seguindo estas instruções:
-          1. IDENTIFICAÇÃO DA RAÇA: Analise formato corporal, pelagem, padrão de cores, cabeça, orelhas, chifres, musculatura.
-          2. ESTIMATIVA DE PESO: Baseie-se em proporções corporais, largura do tórax, altura aparente, condição corporal (score). Informe em kg.
-          3. COR E PADRÃO DA PELAGEM: Descreva cor predominante e padrões.
-          4. DESCRIÇÃO GERAL: Sexo, idade aproximada, condição corporal, porte, presença de chifres, estado geral.
+          1. DETECÇÃO: Identifique cada bovino no quadro e forneça as coordenadas da caixa delimitadora (x_min, y_min, x_max, y_max) em valores de 0 a 1000 (coordenadas normalizadas).
+          2. IDENTIFICAÇÃO DA RAÇA: Analise formato corporal, pelagem, padrão de cores, cabeça, orelhas, chifres, musculatura.
+          3. ESTIMATIVA DE PESO: Baseie-se em proporções corporais, largura do tórax, altura aparente, condição corporal (score). Informe em kg.
+          4. COR E PADRÃO DA PELAGEM: Descreva cor predominante e padrões.
+          5. DESCRIÇÃO GERAL: Sexo, idade aproximada, condição corporal, porte, presença de chifres, estado geral.
           
-          Retorne o resultado estritamente em JSON seguindo o esquema fornecido.`,
+          Retorne o resultado estritamente em JSON seguindo o esquema fornecido.
+          No campo 'lista_de_bovinos', inclua cada animal detectado com seu ID, classe 'bovino', confiança e coordenadas da caixa.`,
         },
       ],
     },
@@ -53,13 +55,35 @@ export async function analyzeBovineImage(base64Image: string): Promise<BovineAna
             type: Type.ARRAY,
             items: { type: Type.STRING }
           },
-          saude_geral: { type: Type.STRING, enum: ["Saudável", "Atenção", "Crítico"] }
+          saude_geral: { type: Type.STRING, enum: ["Saudável", "Atenção", "Crítico"] },
+          lista_de_bovinos: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.INTEGER },
+                classe: { type: Type.STRING },
+                confianca: { type: Type.NUMBER },
+                caixa_delimitadora: {
+                  type: Type.OBJECT,
+                  properties: {
+                    x_min: { type: Type.INTEGER },
+                    y_min: { type: Type.INTEGER },
+                    x_max: { type: Type.INTEGER },
+                    y_max: { type: Type.INTEGER }
+                  },
+                  required: ["x_min", "y_min", "x_max", "y_max"]
+                }
+              },
+              required: ["id", "classe", "confianca", "caixa_delimitadora"]
+            }
+          }
         },
         required: [
           "id", "raca", "confianca_raca", "peso_estimado", "precisao_peso", 
           "cor_pelagem", "padrao_pelagem", "sexo", "idade_estimada", 
           "score_corporal", "porte", "descricao_detalhada", 
-          "observacoes_especialista", "saude_geral"
+          "observacoes_especialista", "saude_geral", "lista_de_bovinos"
         ]
       }
     }

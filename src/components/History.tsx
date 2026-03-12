@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { 
   History as HistoryIcon, 
-  Trash2, 
+  Trash2,
   Edit3, 
   ExternalLink, 
   Search,
@@ -22,6 +22,7 @@ export default function History() {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAnalysis, setSelectedAnalysis] = useState<SavedAnalysis | null>(null);
@@ -33,7 +34,16 @@ export default function History() {
 
   useEffect(() => {
     fetchAnalyses();
-  }, []);
+
+    const handleDeleted = (e: any) => {
+      const deletedId = e.detail.id;
+      setAnalyses(prev => prev.filter(a => a.id !== deletedId));
+      if (selectedAnalysis?.id === deletedId) setSelectedAnalysis(null);
+    };
+
+    window.addEventListener('analysis-deleted', handleDeleted);
+    return () => window.removeEventListener('analysis-deleted', handleDeleted);
+  }, [selectedAnalysis?.id]);
 
   const fetchAnalyses = async () => {
     setIsLoading(true);
@@ -47,15 +57,18 @@ export default function History() {
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm("Tem certeza que deseja excluir esta análise?")) return;
+  const handleDelete = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!confirm("Tem certeza que deseja excluir esta análise? Esta ação não pode ser desfeita.")) return;
+    
+    setIsDeleting(true);
     try {
       await deleteAnalysis(id);
-      setAnalyses(prev => prev.filter(a => a.id !== id));
-      if (selectedAnalysis?.id === id) setSelectedAnalysis(null);
+      // O estado é atualizado via evento CustomEvent 'analysis-deleted'
     } catch (err) {
-      alert("Falha ao excluir.");
+      alert(err instanceof Error ? err.message : "Falha ao excluir a análise.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -340,8 +353,16 @@ export default function History() {
                     ) : (
                       <>
                         <button 
+                          onClick={() => handleDelete(selectedAnalysis.id)}
+                          disabled={isDeleting}
+                          className="p-4 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center justify-center hover:bg-red-100 transition-all disabled:opacity-50"
+                          title="Excluir Análise"
+                        >
+                          {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                        </button>
+                        <button 
                           onClick={startEditing}
-                          className="flex-1 min-w-[140px] bg-gray-100 text-gray-600 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200 transition-all"
+                          className="flex-1 min-w-[120px] bg-gray-100 text-gray-600 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200 transition-all"
                         >
                           <Edit3 className="w-5 h-5" />
                           Editar
@@ -349,7 +370,7 @@ export default function History() {
                         <button 
                           onClick={handleExportPDF}
                           disabled={isExporting}
-                          className="flex-1 min-w-[140px] bg-emerald-500 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg disabled:opacity-50"
+                          className="flex-[2] min-w-[140px] bg-emerald-500 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg disabled:opacity-50"
                         >
                           {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
                           Laudo PDF

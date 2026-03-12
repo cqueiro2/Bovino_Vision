@@ -22,10 +22,17 @@ export async function getAllAnalyses(): Promise<SavedAnalysis[]> {
 }
 
 export async function deleteAnalysis(id: string) {
-  const response = await fetch(`/api/analyses/${id}`, {
+  const response = await fetch(`/api/analyses/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
-  if (!response.ok) throw new Error("Failed to delete analysis");
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to delete analysis");
+  }
+  
+  // Dispatch custom event for other components to react
+  window.dispatchEvent(new CustomEvent('analysis-deleted', { detail: { id } }));
+  
   return response.json();
 }
 

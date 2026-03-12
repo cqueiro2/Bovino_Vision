@@ -7,7 +7,8 @@ import {
   Users,
   Scale,
   Calendar,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -20,25 +21,46 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { getAllAnalyses, SavedAnalysis } from '../services/db';
+import { getAllAnalyses, deleteAnalysis, SavedAnalysis } from '../services/db';
 
 export default function Dashboard() {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const data = await getAllAnalyses();
-        setAnalyses(data);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchData();
+
+    const handleDeleted = (e: any) => {
+      const deletedId = e.detail.id;
+      setAnalyses(prev => prev.filter(a => a.id !== deletedId));
+    };
+
+    window.addEventListener('analysis-deleted', handleDeleted);
+    return () => window.removeEventListener('analysis-deleted', handleDeleted);
   }, []);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const data = await getAllAnalyses();
+      setAnalyses(data);
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Tem certeza que deseja excluir esta análise?")) return;
+    try {
+      await deleteAnalysis(id);
+      // O estado é atualizado via evento CustomEvent 'analysis-deleted'
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Falha ao excluir.");
+    }
+  };
 
   const totalWeight = analyses.reduce((sum, a) => sum + a.peso_estimado, 0);
   const avgWeight = analyses.length > 0 ? totalWeight / analyses.length : 0;
@@ -186,7 +208,7 @@ export default function Dashboard() {
         </div>
         <div className="divide-y divide-gray-100">
           {analyses.slice(0, 5).map((item, i) => (
-            <div key={i} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+            <div key={i} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors group">
               <div className="flex items-center gap-4">
                 <div className={`w-2 h-2 rounded-full ${
                   item.saude_geral === 'Saudável' ? 'bg-emerald-500' : 
@@ -197,7 +219,16 @@ export default function Dashboard() {
                   <p className="text-sm text-gray-500">ID #{item.id.slice(0, 8)} • {item.peso_estimado} kg</p>
                 </div>
               </div>
-              <span className="text-sm text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
+                <button 
+                  onClick={(e) => handleDelete(item.id, e)}
+                  className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                  title="Excluir"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
           {analyses.length === 0 && (

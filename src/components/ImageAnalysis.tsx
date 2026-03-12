@@ -16,7 +16,8 @@ import {
   Scale,
   Target,
   X,
-  Download
+  Download,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeBovineImage } from '../services/gemini';
@@ -133,7 +134,12 @@ export default function ImageAnalysis() {
     setIsSaving(true);
     setError(null);
     try {
-      await saveAnalysis(result, image);
+      // Garantir que o ID seja único e seguro
+      const finalResult = {
+        ...result,
+        id: result.id || `bov-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      };
+      await saveAnalysis(finalResult, image);
       setSaveSuccess(true);
     } catch (err) {
       console.error(err);
@@ -470,9 +476,10 @@ export default function ImageAnalysis() {
                 <div className="flex items-center gap-6">
                   <button 
                     onClick={() => setImage(null)}
-                    className="w-16 h-16 bg-[rgba(255,255,255,0.2)] backdrop-blur-xl rounded-full flex items-center justify-center border border-[rgba(255,255,255,0.3)] hover:bg-[rgba(255,255,255,0.3)] transition-all"
+                    className="w-16 h-16 bg-[rgba(255,255,255,0.2)] backdrop-blur-xl rounded-full flex items-center justify-center border border-[rgba(255,255,255,0.3)] hover:bg-red-500/40 transition-all group/trash"
+                    title="Descartar Imagem"
                   >
-                    <ChevronLeft className="w-8 h-8 text-white" />
+                    <Trash2 className="w-8 h-8 text-white group-hover/trash:scale-110 transition-transform" />
                   </button>
                   <button 
                     onClick={handleAnalyze}

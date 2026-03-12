@@ -24,10 +24,23 @@ db.exec(`
     descricao_detalhada TEXT,
     observacoes_especialista TEXT,
     saude_geral TEXT,
+    lista_de_bovinos TEXT,
     image_data TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `);
+
+// Migration: Add lista_de_bovinos if it doesn't exist (for existing databases)
+try {
+  const columns = db.prepare("PRAGMA table_info(analyses)").all();
+  const hasColumn = columns.some((col: any) => col.name === 'lista_de_bovinos');
+  if (!hasColumn) {
+    db.exec("ALTER TABLE analyses ADD COLUMN lista_de_bovinos TEXT");
+    console.log("Migration: Added lista_de_bovinos column to analyses table");
+  }
+} catch (error) {
+  console.error("Migration error:", error);
+}
 
 async function startServer() {
   const app = express();
@@ -40,11 +53,13 @@ async function startServer() {
   // Create
   app.post("/api/analyses", (req, res) => {
     const { 
-      id, raca, confianca_raca, peso_estimado, precisao_peso, 
+      id: rawId, raca, confianca_raca, peso_estimado, precisao_peso, 
       cor_pelagem, padrao_pelagem, sexo, idade_estimada, 
       score_corporal, porte, descricao_detalhada, 
-      observacoes_especialista, saude_geral, image_data 
+      observacoes_especialista, saude_geral, lista_de_bovinos, image_data 
     } = req.body;
+
+    const id = rawId ? rawId.trim() : null;
 
     try {
       const stmt = db.prepare(`
@@ -52,15 +67,16 @@ async function startServer() {
           id, raca, confianca_raca, peso_estimado, precisao_peso, 
           cor_pelagem, padrao_pelagem, sexo, idade_estimada, 
           score_corporal, porte, descricao_detalhada, 
-          observacoes_especialista, saude_geral, image_data
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          observacoes_especialista, saude_geral, lista_de_bovinos, image_data
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       stmt.run(
         id, raca, confianca_raca, peso_estimado, precisao_peso, 
         cor_pelagem, padrao_pelagem, sexo, idade_estimada, 
         score_corporal, porte, descricao_detalhada, 
-        JSON.stringify(observacoes_especialista), saude_geral, image_data
+        JSON.stringify(observacoes_especialista), saude_geral, 
+        JSON.stringify(lista_de_bovinos), image_data
       );
       
       res.status(201).json({ message: "Analysis saved successfully" });
@@ -76,7 +92,8 @@ async function startServer() {
       const rows = db.prepare("SELECT * FROM analyses ORDER BY created_at DESC").all();
       const formattedRows = rows.map((row: any) => ({
         ...row,
-        observacoes_especialista: JSON.parse(row.observacoes_especialista)
+        observacoes_especialista: JSON.parse(row.observacoes_especialista),
+        lista_de_bovinos: row.lista_de_bovinos ? JSON.parse(row.lista_de_bovinos) : []
       }));
       res.json(formattedRows);
     } catch (error) {
@@ -90,6 +107,7 @@ async function startServer() {
       const row: any = db.prepare("SELECT * FROM analyses WHERE id = ?").get(req.params.id);
       if (row) {
         row.observacoes_especialista = JSON.parse(row.observacoes_especialista);
+        row.lista_de_bovinos = row.lista_de_bovinos ? JSON.parse(row.lista_de_bovinos) : [];
         res.json(row);
       } else {
         res.status(404).json({ error: "Analysis not found" });
@@ -117,15 +135,20 @@ async function startServer() {
 
   // Delete
   app.delete("/api/analyses/:id", (req, res) => {
+    const id = req.params.id.trim();
+    console.log(`Attempting to delete analysis with ID: [${id}]`);
     try {
       const stmt = db.prepare("DELETE FROM analyses WHERE id = ?");
-      const result = stmt.run(req.params.id);
+      const result = stmt.run(id);
       if (result.changes > 0) {
+        console.log(`Successfully deleted analysis: [${id}]`);
         res.json({ message: "Analysis deleted successfully" });
       } else {
+        console.warn(`Analysis not found for deletion: [${id}]`);
         res.status(404).json({ error: "Analysis not found" });
       }
     } catch (error) {
+      console.error(`Error deleting analysis [${id}]:`, error);
       res.status(500).json({ error: "Failed to delete analysis" });
     }
   });
