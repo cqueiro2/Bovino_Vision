@@ -38,6 +38,7 @@ export default function ImageAnalysis() {
   const [pendingCount, setPendingCount] = useState(0);
   const [isProcessingPending, setIsProcessingPending] = useState(false);
   const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -141,11 +142,14 @@ export default function ImageAnalysis() {
     setPendingCount(getPendingAnalyses().length);
 
     const handleOnline = () => {
-      setOfflineNotice('Internet restabelecida. Você já pode processar as análises pendentes.');
+      setIsOnline(true);
+      setOfflineNotice('Internet restabelecida. Iniciando processamento automático das pendências.');
       setPendingCount(getPendingAnalyses().length);
+      void processPendingAnalyses(true);
     };
 
     const handleOffline = () => {
+      setIsOnline(false);
       setOfflineNotice('Sem internet. Novas análises serão armazenadas localmente para processamento futuro.');
     };
 
@@ -158,15 +162,19 @@ export default function ImageAnalysis() {
     };
   }, []);
 
-  const processPendingAnalyses = useCallback(async () => {
+  const processPendingAnalyses = useCallback(async (automatic = false) => {
     if (!navigator.onLine) {
-      setError('Sem internet para processar pendências. Tente novamente quando voltar a conexão.');
+      if (!automatic) {
+        setError('Sem internet para processar pendências. Tente novamente quando voltar a conexão.');
+      }
       return;
     }
 
     const pendingItems = getPendingAnalyses();
     if (!pendingItems.length) {
-      setOfflineNotice('Não há análises pendentes para processar.');
+      if (!automatic) {
+        setOfflineNotice('Não há análises pendentes para processar.');
+      }
       return;
     }
 
@@ -210,7 +218,7 @@ export default function ImageAnalysis() {
     if (!navigator.onLine) {
       enqueuePendingAnalysis(image);
       setPendingCount(getPendingAnalyses().length);
-      setOfflineNotice('Sem internet no momento. A imagem foi salva e será analisada quando você processar as pendências online.');
+      setOfflineNotice('Sem internet no momento. A imagem foi salva e será analisada automaticamente quando o sistema voltar online.');
       setError(null);
       return;
     }
@@ -639,15 +647,16 @@ export default function ImageAnalysis() {
           </p>
           <button
             onClick={processPendingAnalyses}
-            disabled={isProcessingPending || pendingCount === 0 || !navigator.onLine}
+            disabled={isProcessingPending || pendingCount === 0 || !isOnline}
             className="px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isProcessingPending ? 'Processando...' : 'Processar pendências'}
           </button>
         </div>
-        {!navigator.onLine && (
+        {!isOnline && (
           <p className="text-xs text-blue-700">Você está offline. As análises serão enfileiradas localmente.</p>
         )}
+        <p className="text-xs text-blue-700/90">Dica de teste (dev): abra DevTools → Network → Offline, faça uma análise e volte para Online para validar o processamento automático.</p>
       </div>
 
       {offlineNotice && (
