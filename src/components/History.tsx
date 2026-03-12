@@ -15,8 +15,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getAllAnalyses, deleteAnalysis, updateAnalysis, SavedAnalysis } from '../services/db';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 export default function History() {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
@@ -35,8 +33,8 @@ export default function History() {
   useEffect(() => {
     fetchAnalyses();
 
-    const handleDeleted = (e: any) => {
-      const deletedId = e.detail.id;
+    const handleDeleted = (e: Event) => {
+      const deletedId = (e as CustomEvent<{ id: string }>).detail.id;
       setAnalyses(prev => prev.filter(a => a.id !== deletedId));
       if (selectedAnalysis?.id === deletedId) setSelectedAnalysis(null);
     };
@@ -89,6 +87,11 @@ export default function History() {
     
     setIsExporting(true);
     try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf')
+      ]);
+
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,

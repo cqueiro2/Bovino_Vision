@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, type FileRejection } from 'react-dropzone';
 import { 
   Camera, 
   Upload, 
@@ -22,9 +22,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeBovineImage } from '../services/gemini';
 import { saveAnalysis } from '../services/db';
+import { enqueuePendingAnalysis, getPendingAnalyses, removePendingAnalysis } from '../services/offlineQueue';
 import { BovineAnalysisResult } from '../types';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 export default function ImageAnalysis() {
   const [image, setImage] = useState<string | null>(null);
@@ -35,32 +34,58 @@ export default function ImageAnalysis() {
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isVideoMode, setIsVideoMode] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isProcessingPending, setIsProcessingPending] = useState(false);
+  const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const base64 = e.target?.result as string;
-        setImage(base64);
-        setResult(null);
-        setError(null);
-        setSaveSuccess(false);
-        setIsVideoMode(false);
-      };
-      reader.readAsDataURL(file);
-    }
+  const processImageFile = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      setImage(base64);
+      setResult(null);
+      setError(null);
+      setSaveSuccess(false);
+      setIsVideoMode(false);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleRejectedFiles = useCallback((fileRejections: FileRejection[]) => {
+    if (!fileRejections.length) return;
+    const hasInvalidType = fileRejections.some(({ errors }) =>
+      errors.some((fileError) => fileError.code === 'file-invalid-type')
+    );
+    setError(
+      hasInvalidType
+        ? 'Formato inválido. Envie apenas imagens (JPG, PNG, WEBP).' 
+        : 'Não foi possível usar o arquivo selecionado.'
+    );
   }, []);
 
   const { getRootProps, getInputProps, open } = useDropzone({
-    onDrop,
+    onDrop: (acceptedFiles, fileRejections) => {
+      setIsDraggingFile(false);
+      const file = acceptedFiles[0];
+      if (file) {
+        processImageFile(file);
+      }
+      handleRejectedFiles(fileRejections);
+    },
     multiple: false,
-    noClick: true // We'll trigger it manually or via the main area
-  } as any);
+    accept: {
+      'image/*': []
+    },
+    noClick: true, // We'll trigger it manually or via the main area
+    onDragEnter: () => setIsDraggingFile(true),
+    onDragLeave: () => setIsDraggingFile(false),
+    onDragOver: () => setIsDraggingFile(true)
+  });
 
   const startCamera = async () => {
     setIsVideoMode(true);
@@ -112,8 +137,84 @@ export default function ImageAnalysis() {
     };
   }, [isVideoMode]);
 
+  useEffect(() => {
+    setPendingCount(getPendingAnalyses().length);
+
+    const handleOnline = () => {
+      setOfflineNotice('Internet restabelecida. Você já pode processar as análises pendentes.');
+      setPendingCount(getPendingAnalyses().length);
+    };
+
+    const handleOffline = () => {
+      setOfflineNotice('Sem internet. Novas análises serão armazenadas localmente para processamento futuro.');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const processPendingAnalyses = useCallback(async () => {
+    if (!navigator.onLine) {
+      setError('Sem internet para processar pendências. Tente novamente quando voltar a conexão.');
+      return;
+    }
+
+    const pendingItems = getPendingAnalyses();
+    if (!pendingItems.length) {
+      setOfflineNotice('Não há análises pendentes para processar.');
+      return;
+    }
+
+    setIsProcessingPending(true);
+    setError(null);
+
+    let processed = 0;
+
+    for (const pendingItem of pendingItems) {
+      try {
+        const base64Data = pendingItem.imageData.split(',')[1];
+        const analysisResult = await analyzeBovineImage(base64Data);
+        const finalResult = {
+          ...analysisResult,
+          id: analysisResult.id || `bov-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+        };
+        await saveAnalysis(finalResult, pendingItem.imageData);
+        removePendingAnalysis(pendingItem.id);
+        processed += 1;
+      } catch (err) {
+        console.error('Erro ao processar item pendente:', err);
+      }
+    }
+
+    const remaining = getPendingAnalyses().length;
+    setPendingCount(remaining);
+    setIsProcessingPending(false);
+
+    if (processed > 0) {
+      setOfflineNotice(`${processed} análise(s) pendente(s) processada(s) com sucesso.`);
+    }
+
+    if (remaining > 0) {
+      setError(`${remaining} análise(s) ainda pendente(s). Verifique a conexão e tente novamente.`);
+    }
+  }, []);
+
   const handleAnalyze = async () => {
     if (!image) return;
+
+    if (!navigator.onLine) {
+      enqueuePendingAnalysis(image);
+      setPendingCount(getPendingAnalyses().length);
+      setOfflineNotice('Sem internet no momento. A imagem foi salva e será analisada quando você processar as pendências online.');
+      setError(null);
+      return;
+    }
+
     setIsAnalyzing(true);
     setError(null);
     setSaveSuccess(false);
@@ -123,7 +224,10 @@ export default function ImageAnalysis() {
       setResult(analysisResult);
     } catch (err) {
       console.error(err);
-      setError("Falha ao analisar a imagem. Verifique sua conexão e tente novamente.");
+      enqueuePendingAnalysis(image);
+      setPendingCount(getPendingAnalyses().length);
+      setOfflineNotice('Falha de conexão durante a análise. A imagem foi guardada para processamento futuro.');
+      setError("Falha ao analisar agora. A imagem foi salva para análise futura.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -154,6 +258,11 @@ export default function ImageAnalysis() {
     
     setIsExporting(true);
     try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf')
+      ]);
+
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
@@ -390,7 +499,7 @@ export default function ImageAnalysis() {
           <div 
             {...getRootProps()} 
             onClick={() => open()}
-            className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer"
+            className={`absolute inset-0 flex flex-col items-center justify-center cursor-pointer transition-all ${isDraggingFile ? 'ring-4 ring-emerald-300 bg-emerald-500/20' : ''}`}
           >
             <input {...getInputProps()} />
             <div className="absolute inset-0 opacity-40">
@@ -406,7 +515,7 @@ export default function ImageAnalysis() {
               <div className="bg-white/20 backdrop-blur-xl p-6 rounded-full inline-block mb-6 border border-white/30">
                 <Camera className="w-12 h-12 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">Pronto para Analisar</h3>
+              <h3 className="text-2xl font-bold text-white mb-2">{isDraggingFile ? 'Solte a imagem para analisar' : 'Pronto para Analisar'}</h3>
               <p className="text-white/70">Toque para capturar ou arraste uma foto</p>
             </div>
 
@@ -522,6 +631,30 @@ export default function ImageAnalysis() {
           <span className="font-bold text-gray-600">Vídeo</span>
         </button>
       </div>
+
+      <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-2xl space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm font-semibold text-blue-900">
+            Análises pendentes offline: <span className="font-black">{pendingCount}</span>
+          </p>
+          <button
+            onClick={processPendingAnalyses}
+            disabled={isProcessingPending || pendingCount === 0 || !navigator.onLine}
+            className="px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isProcessingPending ? 'Processando...' : 'Processar pendências'}
+          </button>
+        </div>
+        {!navigator.onLine && (
+          <p className="text-xs text-blue-700">Você está offline. As análises serão enfileiradas localmente.</p>
+        )}
+      </div>
+
+      {offlineNotice && (
+        <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-800 text-sm font-medium">
+          {offlineNotice}
+        </div>
+      )}
 
       {error && (
         <div className="mt-4 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-700">
