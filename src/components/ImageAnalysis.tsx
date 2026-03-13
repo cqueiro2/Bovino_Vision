@@ -44,6 +44,26 @@ export default function ImageAnalysis() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
+
+  const getErrorMessage = (err: unknown) => {
+    if (err instanceof Error && err.message) return err.message;
+    return 'Erro inesperado durante a análise.';
+  };
+
+  const isConnectivityError = (err: unknown) => {
+    if (!navigator.onLine) return true;
+    const message = getErrorMessage(err).toLowerCase();
+    return [
+      'network',
+      'failed to fetch',
+      'fetch failed',
+      'timeout',
+      'econn',
+      'enotfound',
+      'connection'
+    ].some((term) => message.includes(term));
+  };
+
   const processImageFile = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -196,6 +216,10 @@ export default function ImageAnalysis() {
         processed += 1;
       } catch (err) {
         console.error('Erro ao processar item pendente:', err);
+        if (!isConnectivityError(err)) {
+          setError(`Falha ao processar pendências: ${getErrorMessage(err)}`);
+          break;
+        }
       }
     }
 
@@ -208,7 +232,7 @@ export default function ImageAnalysis() {
     }
 
     if (remaining > 0) {
-      setError(`${remaining} análise(s) ainda pendente(s). Verifique a conexão e tente novamente.`);
+      setError(`${remaining} análise(s) ainda pendente(s). Tente novamente quando a conexão/API estiver disponível.`);
     }
   }, []);
 
@@ -232,10 +256,14 @@ export default function ImageAnalysis() {
       setResult(analysisResult);
     } catch (err) {
       console.error(err);
-      enqueuePendingAnalysis(image);
-      setPendingCount(getPendingAnalyses().length);
-      setOfflineNotice('Falha de conexão durante a análise. A imagem foi guardada para processamento futuro.');
-      setError("Falha ao analisar agora. A imagem foi salva para análise futura.");
+      if (isConnectivityError(err)) {
+        enqueuePendingAnalysis(image);
+        setPendingCount(getPendingAnalyses().length);
+        setOfflineNotice('Falha de conexão durante a análise. A imagem foi guardada para processamento futuro.');
+        setError('Falha ao analisar agora. A imagem foi salva para análise futura.');
+      } else {
+        setError(`Falha ao analisar imagem: ${getErrorMessage(err)}`);
+      }
     } finally {
       setIsAnalyzing(false);
     }
