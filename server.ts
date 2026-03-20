@@ -137,7 +137,19 @@ async function startServer() {
     }
   });
 
-  // Delete
+  // Delete All
+  app.delete("/api/analyses", (req, res) => {
+    try {
+      const stmt = db.prepare("DELETE FROM analyses");
+      stmt.run();
+      res.json({ message: "All analyses deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting all analyses:", error);
+      res.status(500).json({ error: "Failed to delete all analyses" });
+    }
+  });
+
+  // Delete One
   app.delete("/api/analyses/:id", (req, res) => {
     const id = req.params.id.trim();
     console.log(`Attempting to delete analysis with ID: [${id}]`);

@@ -29,6 +29,18 @@ export async function getAllAnalyses(): Promise<SavedAnalysis[]> {
   return response.json();
 }
 
+export async function deleteAllAnalyses() {
+  const response = await fetch("/api/analyses", {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete all analyses");
+  
+  // Dispatch custom event
+  window.dispatchEvent(new CustomEvent('all-analyses-deleted'));
+  
+  return response.json();
+}
+
 export async function deleteAnalysis(id: string) {
   const response = await fetch(`/api/analyses/${encodeURIComponent(id)}`, {
     method: "DELETE",

@@ -14,7 +14,8 @@ import {
   Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getAllAnalyses, deleteAnalysis, updateAnalysis, SavedAnalysis } from '../services/db';
+import { getAllAnalyses, deleteAnalysis, updateAnalysis, deleteAllAnalyses, SavedAnalysis } from '../services/db';
+import ConfirmationModal from './ConfirmationModal';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -26,6 +27,10 @@ export default function History() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAnalysis, setSelectedAnalysis] = useState<SavedAnalysis | null>(null);
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | 'all' | null }>({
+    isOpen: false,
+    id: null
+  });
 
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<SavedAnalysis>>({});
@@ -41,8 +46,17 @@ export default function History() {
       if (selectedAnalysis?.id === deletedId) setSelectedAnalysis(null);
     };
 
+    const handleAllDeleted = () => {
+      setAnalyses([]);
+      setSelectedAnalysis(null);
+    };
+
     window.addEventListener('analysis-deleted', handleDeleted);
-    return () => window.removeEventListener('analysis-deleted', handleDeleted);
+    window.addEventListener('all-analyses-deleted', handleAllDeleted);
+    return () => {
+      window.removeEventListener('analysis-deleted', handleDeleted);
+      window.removeEventListener('all-analyses-deleted', handleAllDeleted);
+    };
   }, [selectedAnalysis?.id]);
 
   const fetchAnalyses = async () => {
@@ -57,19 +71,27 @@ export default function History() {
     }
   };
 
-  const handleDelete = async (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (!confirm("Tem certeza que deseja excluir esta análise? Esta ação não pode ser desfeita.")) return;
+  const handleDelete = async () => {
+    if (!deleteModal.id) return;
     
     setIsDeleting(true);
     try {
-      await deleteAnalysis(id);
-      // O estado é atualizado via evento CustomEvent 'analysis-deleted'
+      if (deleteModal.id === 'all') {
+        await deleteAllAnalyses();
+      } else {
+        await deleteAnalysis(deleteModal.id);
+      }
+      setDeleteModal({ isOpen: false, id: null });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Falha ao excluir a análise.");
+      alert(err instanceof Error ? err.message : "Falha ao excluir.");
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const openDeleteModal = (id: string | 'all', e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDeleteModal({ isOpen: true, id });
   };
 
   const handleUpdate = async () => {
@@ -168,15 +190,26 @@ export default function History() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-gray-900">Histórico de Análises</h2>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Buscar por raça ou ID..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full md:w-64"
-          />
+        <div className="flex items-center gap-3">
+          {analyses.length > 0 && (
+            <button 
+              onClick={() => openDeleteModal('all')}
+              className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-2xl transition-all font-bold text-sm"
+            >
+              <Trash2 className="w-4 h-4" />
+              Limpar Tudo
+            </button>
+          )}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input 
+              type="text" 
+              placeholder="Buscar por raça ou ID..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full md:w-64"
+            />
+          </div>
         </div>
       </div>
 
@@ -206,7 +239,7 @@ export default function History() {
                 />
                 <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button 
-                    onClick={(e) => handleDelete(analysis.id, e)}
+                    onClick={(e) => openDeleteModal(analysis.id, e)}
                     className="p-2 bg-[rgba(255,255,255,0.9)] backdrop-blur-sm rounded-full text-red-500 hover:bg-red-50"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -353,7 +386,7 @@ export default function History() {
                     ) : (
                       <>
                         <button 
-                          onClick={() => handleDelete(selectedAnalysis.id)}
+                          onClick={() => openDeleteModal(selectedAnalysis.id)}
                           disabled={isDeleting}
                           className="p-4 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center justify-center hover:bg-red-100 transition-all disabled:opacity-50"
                           title="Excluir Análise"
@@ -384,6 +417,18 @@ export default function History() {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmationModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, id: null })}
+        onConfirm={handleDelete}
+        isDeleting={isDeleting}
+        title={deleteModal.id === 'all' ? "Limpar Histórico" : "Excluir Análise"}
+        message={deleteModal.id === 'all' 
+          ? "Tem certeza que deseja excluir TODAS as análises? Esta ação é irreversível." 
+          : "Tem certeza que deseja excluir esta análise? Esta ação não pode ser desfeita."}
+        confirmLabel={deleteModal.id === 'all' ? "Excluir Tudo" : "Excluir"}
+      />
     </div>
   );
 }

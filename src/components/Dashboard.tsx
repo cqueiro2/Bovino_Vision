@@ -23,9 +23,16 @@ import {
 } from 'recharts';
 import { getAllAnalyses, deleteAnalysis, SavedAnalysis } from '../services/db';
 
+import ConfirmationModal from './ConfirmationModal';
+
 export default function Dashboard() {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null }>({
+    isOpen: false,
+    id: null
+  });
 
   useEffect(() => {
     fetchData();
@@ -35,8 +42,16 @@ export default function Dashboard() {
       setAnalyses(prev => prev.filter(a => a.id !== deletedId));
     };
 
+    const handleAllDeleted = () => {
+      setAnalyses([]);
+    };
+
     window.addEventListener('analysis-deleted', handleDeleted);
-    return () => window.removeEventListener('analysis-deleted', handleDeleted);
+    window.addEventListener('all-analyses-deleted', handleAllDeleted);
+    return () => {
+      window.removeEventListener('analysis-deleted', handleDeleted);
+      window.removeEventListener('all-analyses-deleted', handleAllDeleted);
+    };
   }, []);
 
   const fetchData = async () => {
@@ -51,15 +66,22 @@ export default function Dashboard() {
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm("Tem certeza que deseja excluir esta análise?")) return;
+  const handleDelete = async () => {
+    if (!deleteModal.id) return;
+    setIsDeleting(true);
     try {
-      await deleteAnalysis(id);
-      // O estado é atualizado via evento CustomEvent 'analysis-deleted'
+      await deleteAnalysis(deleteModal.id);
+      setDeleteModal({ isOpen: false, id: null });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Falha ao excluir.");
+    } finally {
+      setIsDeleting(false);
     }
+  };
+
+  const openDeleteModal = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeleteModal({ isOpen: true, id });
   };
 
   const totalWeight = analyses.reduce((sum, a) => sum + a.peso_estimado, 0);
@@ -222,7 +244,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-4">
                 <span className="text-sm text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
                 <button 
-                  onClick={(e) => handleDelete(item.id, e)}
+                  onClick={(e) => openDeleteModal(item.id, e)}
                   className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
                   title="Excluir"
                 >
@@ -238,6 +260,16 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, id: null })}
+        onConfirm={handleDelete}
+        isDeleting={isDeleting}
+        title="Excluir Análise"
+        message="Tem certeza que deseja excluir esta análise? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+      />
     </div>
   );
 }
