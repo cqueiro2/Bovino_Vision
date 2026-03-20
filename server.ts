@@ -5,7 +5,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const db = new Database("bovino_vision.db");
+const dbPath = path.join(process.cwd(), "bovino_vision.db");
+const db = new Database(dbPath);
 
 // Initialize Database
 db.exec(`
@@ -63,7 +64,7 @@ async function startServer() {
 
     try {
       const stmt = db.prepare(`
-        INSERT INTO analyses (
+        INSERT OR REPLACE INTO analyses (
           id, raca, confianca_raca, peso_estimado, precisao_peso, 
           cor_pelagem, padrao_pelagem, sexo, idade_estimada, 
           score_corporal, porte, descricao_detalhada, 
@@ -75,14 +76,17 @@ async function startServer() {
         id, raca, confianca_raca, peso_estimado, precisao_peso, 
         cor_pelagem, padrao_pelagem, sexo, idade_estimada, 
         score_corporal, porte, descricao_detalhada, 
-        JSON.stringify(observacoes_especialista), saude_geral, 
-        JSON.stringify(lista_de_bovinos), image_data
+        JSON.stringify(observacoes_especialista || []), saude_geral, 
+        JSON.stringify(lista_de_bovinos || []), image_data
       );
       
       res.status(201).json({ message: "Analysis saved successfully" });
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to save analysis" });
+      console.error("Database Error (POST /api/analyses):", error);
+      res.status(500).json({ 
+        error: "Failed to save analysis", 
+        details: error instanceof Error ? error.message : String(error) 
+      });
     }
   });
 

@@ -134,10 +134,11 @@ export default function ImageAnalysis() {
     setIsSaving(true);
     setError(null);
     try {
-      // Garantir que o ID seja único e seguro
+      // Garantir que o ID seja único e seguro para o banco de dados
+      const uniqueId = `bov-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const finalResult = {
         ...result,
-        id: result.id || `bov-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+        id: uniqueId
       };
       await saveAnalysis(finalResult, image);
       setSaveSuccess(true);

@@ -11,7 +11,15 @@ export async function saveAnalysis(result: BovineAnalysisResult, imageData: stri
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...result, image_data: imageData }),
   });
-  if (!response.ok) throw new Error("Failed to save analysis");
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.details 
+      ? `Failed to save analysis: ${errorData.details}` 
+      : (errorData.error || "Failed to save analysis");
+    throw new Error(errorMessage);
+  }
+  
   return response.json();
 }
 
