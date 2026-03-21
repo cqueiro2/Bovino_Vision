@@ -22,6 +22,7 @@ import Dashboard from './components/Dashboard';
 import ImageAnalysis from './components/ImageAnalysis';
 import History from './components/History';
 import SyncManager from './components/SyncManager';
+import WhatsAppSettings from './components/WhatsAppSettings';
 
 export default function App() {
   const [view, setView] = useState<ViewMode>('dashboard');
@@ -32,6 +33,7 @@ export default function App() {
     { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
     { id: 'analysis', label: 'Análise', icon: Camera },
     { id: 'history', label: 'Histórico', icon: HistoryIcon },
+    { id: 'whatsapp', label: 'WhatsApp', icon: Database },
     { id: 'settings', label: 'Ajustes', icon: Settings },
   ];
 
@@ -149,6 +151,7 @@ export default function App() {
               {view === 'dashboard' && <Dashboard />}
               {view === 'analysis' && <ImageAnalysis />}
               {view === 'history' && <History />}
+              {view === 'whatsapp' && <WhatsAppSettings />}
               {view === 'settings' && (
                 <div className="bg-white p-8 rounded-[32px] border border-gray-200 shadow-sm max-w-2xl mx-auto">
                   <h3 className="text-2xl font-bold mb-8">Ajustes do Sistema</h3>

@@ -28,4 +28,4 @@ export interface BovineAnalysisResult {
   lista_de_bovinos?: BovineDetection[];
 }
 
-export type ViewMode = 'dashboard' | 'analysis' | 'history' | 'settings';
+export type ViewMode = 'dashboard' | 'analysis' | 'history' | 'settings' | 'whatsapp';

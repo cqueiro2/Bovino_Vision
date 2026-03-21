@@ -11,10 +11,12 @@ import {
   X,
   Download,
   FileText,
-  Info
+  Info,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getAllAnalyses, deleteAnalysis, updateAnalysis, deleteAllAnalyses, SavedAnalysis } from '../services/db';
+import { analyzeBovineImage } from '../services/gemini';
 import ConfirmationModal from './ConfirmationModal';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -24,6 +26,7 @@ export default function History() {
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isProcessingWA, setIsProcessingWA] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAnalysis, setSelectedAnalysis] = useState<SavedAnalysis | null>(null);
@@ -70,6 +73,40 @@ export default function History() {
       setError("Falha ao carregar histórico.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleProcessWA = async (analysis: SavedAnalysis, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsProcessingWA(analysis.id);
+    try {
+      // 1. Fetch image and convert to base64
+      const response = await fetch(analysis.image_data);
+      const blob = await response.blob();
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+      const base64 = await base64Promise;
+      const base64Data = base64.split(',')[1];
+
+      // 2. Analyze with Gemini
+      const result = await analyzeBovineImage(base64Data);
+
+      // 3. Update in DB
+      await updateAnalysis(analysis.id, {
+        ...result,
+        image_data: base64
+      });
+
+      // 4. Refresh list
+      fetchAnalyses();
+    } catch (err) {
+      console.error("Error processing WhatsApp image:", err);
+      alert("Falha ao processar imagem do WhatsApp. Verifique sua conexão.");
+    } finally {
+      setIsProcessingWA(null);
     }
   };
 
@@ -247,12 +284,13 @@ export default function History() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="absolute bottom-4 left-4">
+                <div className="absolute bottom-4 left-4 flex gap-2">
                   <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
                     analysis.saude_geral === 'Saudável' ? 'bg-emerald-500 text-white' :
-                    analysis.saude_geral === 'Atenção' ? 'bg-amber-500 text-white' : 'bg-red-500 text-white'
+                    analysis.saude_geral === 'Atenção' ? 'bg-amber-500 text-white' : 
+                    analysis.id.startsWith('wa-') ? 'bg-blue-500 text-white' : 'bg-red-500 text-white'
                   }`}>
-                    {analysis.saude_geral}
+                    {analysis.id.startsWith('wa-') && !analysis.peso_estimado ? 'WhatsApp' : analysis.saude_geral}
                   </span>
                 </div>
               </div>
@@ -261,12 +299,26 @@ export default function History() {
                   <h3 className="font-bold text-lg text-gray-900">{analysis.raca}</h3>
                   <span className="text-xs font-mono text-gray-400">#{analysis.id.slice(0, 8)}</span>
                 </div>
-                <div className="flex items-center gap-4 text-sm text-gray-500">
-                  <div className="flex items-center gap-1">
-                    <HistoryIcon className="w-4 h-4" />
-                    {new Date(analysis.created_at).toLocaleDateString()}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4 text-sm text-gray-500">
+                    <div className="flex items-center gap-1">
+                      <HistoryIcon className="w-4 h-4" />
+                      {new Date(analysis.created_at).toLocaleDateString()}
+                    </div>
+                    {analysis.peso_estimado > 0 && (
+                      <div className="font-bold text-gray-900">{analysis.peso_estimado} kg</div>
+                    )}
                   </div>
-                  <div className="font-bold text-gray-900">{analysis.peso_estimado} kg</div>
+                  {analysis.id.startsWith('wa-') && !analysis.peso_estimado && (
+                    <button 
+                      onClick={(e) => handleProcessWA(analysis, e)}
+                      disabled={isProcessingWA === analysis.id}
+                      className="px-3 py-1 bg-blue-500 text-white text-xs font-bold rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1"
+                    >
+                      {isProcessingWA === analysis.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                      Analisar
+                    </button>
+                  )}
                 </div>
               </div>
             </motion.div>

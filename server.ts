@@ -29,6 +29,13 @@ db.exec(`
     image_data TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS whatsapp_users (
+    phone_number TEXT PRIMARY KEY,
+    status TEXT DEFAULT 'active',
+    last_metadata TEXT, -- JSON string with { breed, age, sex }
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Seed Sample Analyses if empty
@@ -81,6 +88,85 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true }));
+
+  // WhatsApp API Routes
+  
+  // Register/Update Phone
+  app.post("/api/whatsapp/register", (req, res) => {
+    const { phone_number } = req.body;
+    if (!phone_number) return res.status(400).json({ error: "Phone number is required" });
+    
+    try {
+      const stmt = db.prepare("INSERT OR REPLACE INTO whatsapp_users (phone_number, status) VALUES (?, 'active')");
+      stmt.run(phone_number);
+      res.json({ message: "WhatsApp registration successful" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to register WhatsApp" });
+    }
+  });
+
+  // Get Status
+  app.get("/api/whatsapp/status/:phone", (req, res) => {
+    try {
+      const row = db.prepare("SELECT * FROM whatsapp_users WHERE phone_number = ?").get(req.params.phone);
+      res.json(row || { status: 'not_registered' });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch WhatsApp status" });
+    }
+  });
+
+  // Webhook for WhatsApp (Generic/Twilio style)
+  app.post("/api/whatsapp/webhook", async (req, res) => {
+    const { From, Body, MediaUrl0, MediaContentType0 } = req.body;
+    const phone = From ? From.replace('whatsapp:', '') : null;
+
+    if (!phone) return res.status(200).send("OK");
+
+    try {
+      const user = db.prepare("SELECT * FROM whatsapp_users WHERE phone_number = ?").get(phone) as any;
+      
+      if (!user) {
+        return res.status(200).send("User not registered");
+      }
+
+      // Handle Text (Metadata)
+      if (Body && !MediaUrl0) {
+        const text = Body.toLowerCase();
+        let metadata = user.last_metadata ? JSON.parse(user.last_metadata) : {};
+
+        if (text.includes('raça:') || text.includes('raca:')) {
+          metadata.breed = text.split(/raça:|raca:/)[1].trim();
+        }
+        if (text.includes('idade:')) {
+          metadata.age = text.split('idade:')[1].trim();
+        }
+        if (text.includes('sexo:')) {
+          metadata.sex = text.split('sexo:')[1].trim();
+        }
+
+        db.prepare("UPDATE whatsapp_users SET last_metadata = ? WHERE phone_number = ?")
+          .run(JSON.stringify(metadata), phone);
+      }
+
+      // Handle Image (Analysis)
+      if (MediaUrl0 && MediaContentType0?.startsWith('image/')) {
+        console.log(`Received image from ${phone}: ${MediaUrl0}`);
+        const id = `wa-${Date.now()}`;
+        const metadata = user.last_metadata ? JSON.parse(user.last_metadata) : {};
+        
+        db.prepare(`
+          INSERT INTO analyses (id, raca, sexo, idade_estimada, image_data, descricao_detalhada)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, metadata.breed || 'Pendente', metadata.sex || 'Pendente', metadata.age || 'Pendente', MediaUrl0, "Enviado via WhatsApp");
+      }
+
+      res.status(200).send("OK");
+    } catch (error) {
+      console.error("WhatsApp Webhook Error:", error);
+      res.status(200).send("Error but OK");
+    }
+  });
 
   // CRUD API Routes
   
@@ -156,16 +242,49 @@ async function startServer() {
 
   // Update
   app.put("/api/analyses/:id", (req, res) => {
-    const { raca, peso_estimado, saude_geral } = req.body;
+    const { 
+      raca, confianca_raca, peso_estimado, precisao_peso, 
+      cor_pelagem, padrao_pelagem, sexo, idade_estimada, 
+      score_corporal, porte, descricao_detalhada, 
+      observacoes_especialista, saude_geral, lista_de_bovinos, image_data 
+    } = req.body;
     try {
-      const stmt = db.prepare("UPDATE analyses SET raca = ?, peso_estimado = ?, saude_geral = ? WHERE id = ?");
-      const result = stmt.run(raca, peso_estimado, saude_geral, req.params.id);
+      const stmt = db.prepare(`
+        UPDATE analyses SET 
+          raca = COALESCE(?, raca),
+          confianca_raca = COALESCE(?, confianca_raca),
+          peso_estimado = COALESCE(?, peso_estimado),
+          precisao_peso = COALESCE(?, precisao_peso),
+          cor_pelagem = COALESCE(?, cor_pelagem),
+          padrao_pelagem = COALESCE(?, padrao_pelagem),
+          sexo = COALESCE(?, sexo),
+          idade_estimada = COALESCE(?, idade_estimada),
+          score_corporal = COALESCE(?, score_corporal),
+          porte = COALESCE(?, porte),
+          descricao_detalhada = COALESCE(?, descricao_detalhada),
+          observacoes_especialista = COALESCE(?, observacoes_especialista),
+          saude_geral = COALESCE(?, saude_geral),
+          lista_de_bovinos = COALESCE(?, lista_de_bovinos),
+          image_data = COALESCE(?, image_data)
+        WHERE id = ?
+      `);
+      const result = stmt.run(
+        raca, confianca_raca, peso_estimado, precisao_peso, 
+        cor_pelagem, padrao_pelagem, sexo, idade_estimada, 
+        score_corporal, porte, descricao_detalhada, 
+        observacoes_especialista ? JSON.stringify(observacoes_especialista) : null, 
+        saude_geral, 
+        lista_de_bovinos ? JSON.stringify(lista_de_bovinos) : null, 
+        image_data,
+        req.params.id
+      );
       if (result.changes > 0) {
         res.json({ message: "Analysis updated successfully" });
       } else {
         res.status(404).json({ error: "Analysis not found" });
       }
     } catch (error) {
+      console.error("Update Error:", error);
       res.status(500).json({ error: "Failed to update analysis" });
     }
   });

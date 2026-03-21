@@ -56,7 +56,7 @@ export async function deleteAnalysis(id: string) {
   return response.json();
 }
 
-export async function updateAnalysis(id: string, data: Partial<BovineAnalysisResult>) {
+export async function updateAnalysis(id: string, data: Partial<SavedAnalysis>) {
   const response = await fetch(`/api/analyses/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
