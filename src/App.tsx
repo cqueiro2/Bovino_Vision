@@ -13,7 +13,8 @@ import {
   Menu, 
   X,
   CheckCircle2,
-  User
+  User,
+  Database
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ViewMode } from './types';

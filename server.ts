@@ -28,8 +28,41 @@ db.exec(`
     lista_de_bovinos TEXT,
     image_data TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
+  );
 `);
+
+// Seed Sample Analyses if empty
+const analysesCount = db.prepare("SELECT COUNT(*) as count FROM analyses").get() as { count: number };
+if (analysesCount.count === 0) {
+  const insertAnalysis = db.prepare(`
+    INSERT INTO analyses (
+      id, raca, confianca_raca, peso_estimado, precisao_peso, 
+      cor_pelagem, padrao_pelagem, sexo, idade_estimada, 
+      score_corporal, porte, descricao_detalhada, 
+      observacoes_especialista, saude_geral, lista_de_bovinos, image_data
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const samples = [
+    [
+      "sample-1", "Nelore", 0.98, 720.5, "Alta", "Branco", "Uniforme", "Macho", "36 meses", 
+      "4/5", "Grande", "Animal em excelente estado de conservação.", 
+      JSON.stringify(["Peso acima da média para a idade", "Pelagem brilhante"]), 
+      "Saudável", JSON.stringify([]), "https://picsum.photos/seed/cow1/800/600"
+    ],
+    [
+      "sample-2", "Angus", 0.95, 680.0, "Média", "Preto", "Uniforme", "Fêmea", "24 meses", 
+      "3/5", "Médio", "Novilha com bom desenvolvimento.", 
+      JSON.stringify(["Acompanhar ganho de peso"]), 
+      "Saudável", JSON.stringify([]), "https://picsum.photos/seed/cow2/800/600"
+    ]
+  ];
+
+  for (const sample of samples) {
+    insertAnalysis.run(...sample);
+  }
+  console.log("Seeded sample analyses.");
+}
 
 // Migration: Add lista_de_bovinos if it doesn't exist (for existing databases)
 try {
