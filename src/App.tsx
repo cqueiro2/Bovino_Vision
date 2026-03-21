@@ -29,11 +29,21 @@ export default function App() {
   const [isSidebarOpen, setSidebarOpen] = useState(false); // Default closed on mobile
   const [isDesktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
 
+  const [isWhatsAppEnabled, setIsWhatsAppEnabled] = useState(() => {
+    return localStorage.getItem('whatsapp_enabled') === 'true';
+  });
+
+  const toggleWhatsApp = () => {
+    const newState = !isWhatsAppEnabled;
+    setIsWhatsAppEnabled(newState);
+    localStorage.setItem('whatsapp_enabled', String(newState));
+  };
+
   const navItems = [
     { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
     { id: 'analysis', label: 'Análise', icon: Camera },
     { id: 'history', label: 'Histórico', icon: HistoryIcon },
-    { id: 'whatsapp', label: 'WhatsApp', icon: Database },
+    ...(isWhatsAppEnabled ? [{ id: 'whatsapp', label: 'WhatsApp', icon: Database }] : []),
     { id: 'settings', label: 'Ajustes', icon: Settings },
   ];
 
@@ -168,10 +178,26 @@ export default function App() {
                     <div className="flex items-center justify-between p-6 border border-gray-100 rounded-3xl bg-[#f9fafb]">
                       <div>
                         <p className="font-bold text-gray-900">Integração WhatsApp</p>
-                        <p className="text-sm text-gray-500">Receba relatórios diretamente no seu número</p>
+                        <p className="text-sm text-gray-500">Habilitar agente para coleta de dados</p>
                       </div>
-                      <div className="w-14 h-8 bg-gray-200 rounded-full relative cursor-pointer">
-                        <div className="absolute left-1 top-1 w-6 h-6 bg-white rounded-full shadow-sm" />
+                      <div className="flex items-center gap-4">
+                        {isWhatsAppEnabled && (
+                          <button 
+                            onClick={() => setView('whatsapp')}
+                            className="px-4 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-bold rounded-xl hover:bg-gray-50 transition-all shadow-sm"
+                          >
+                            Configurar
+                          </button>
+                        )}
+                        <div 
+                          onClick={toggleWhatsApp}
+                          className={`w-14 h-8 rounded-full relative cursor-pointer transition-colors ${isWhatsAppEnabled ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                        >
+                          <motion.div 
+                            animate={{ x: isWhatsAppEnabled ? 24 : 0 }}
+                            className="absolute left-1 top-1 w-6 h-6 bg-white rounded-full shadow-sm" 
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

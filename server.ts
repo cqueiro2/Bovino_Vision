@@ -4,6 +4,8 @@ import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import axios from "axios";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.join(process.cwd(), "bovino_vision.db");
 const db = new Database(dbPath);
@@ -155,10 +157,24 @@ async function startServer() {
         const id = `wa-${Date.now()}`;
         const metadata = user.last_metadata ? JSON.parse(user.last_metadata) : {};
         
-        db.prepare(`
-          INSERT INTO analyses (id, raca, sexo, idade_estimada, image_data, descricao_detalhada)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).run(id, metadata.breed || 'Pendente', metadata.sex || 'Pendente', metadata.age || 'Pendente', MediaUrl0, "Enviado via WhatsApp");
+        try {
+          // Fetch image and convert to base64
+          const response = await axios.get(MediaUrl0, { responseType: 'arraybuffer' });
+          const base64 = Buffer.from(response.data, 'binary').toString('base64');
+          const imageData = `data:${MediaContentType0};base64,${base64}`;
+
+          db.prepare(`
+            INSERT INTO analyses (id, raca, sexo, idade_estimada, image_data, descricao_detalhada)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(id, metadata.breed || 'Pendente', metadata.sex || 'Pendente', metadata.age || 'Pendente', imageData, "Enviado via WhatsApp");
+        } catch (imgError) {
+          console.error("Error fetching image from WhatsApp:", imgError);
+          // Fallback to URL if fetch fails
+          db.prepare(`
+            INSERT INTO analyses (id, raca, sexo, idade_estimada, image_data, descricao_detalhada)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(id, metadata.breed || 'Pendente', metadata.sex || 'Pendente', metadata.age || 'Pendente', MediaUrl0, "Enviado via WhatsApp (URL)");
+        }
       }
 
       res.status(200).send("OK");

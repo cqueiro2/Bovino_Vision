@@ -80,16 +80,25 @@ export default function History() {
     e.stopPropagation();
     setIsProcessingWA(analysis.id);
     try {
-      // 1. Fetch image and convert to base64
-      const response = await fetch(analysis.image_data);
-      const blob = await response.blob();
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(blob);
-      });
-      const base64 = await base64Promise;
-      const base64Data = base64.split(',')[1];
+      let base64Data = '';
+      let base64Full = '';
+
+      // 1. Check if image_data is already base64
+      if (analysis.image_data.startsWith('data:')) {
+        base64Full = analysis.image_data;
+        base64Data = analysis.image_data.split(',')[1];
+      } else {
+        // Fetch image and convert to base64 if it's a URL
+        const response = await fetch(analysis.image_data);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        base64Full = await base64Promise;
+        base64Data = base64Full.split(',')[1];
+      }
 
       // 2. Analyze with Gemini
       const result = await analyzeBovineImage(base64Data);
@@ -97,7 +106,7 @@ export default function History() {
       // 3. Update in DB
       await updateAnalysis(analysis.id, {
         ...result,
-        image_data: base64
+        image_data: base64Full
       });
 
       // 4. Refresh list
