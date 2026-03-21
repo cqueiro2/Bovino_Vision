@@ -8,7 +8,8 @@ import {
   Scale,
   Calendar,
   Loader2,
-  Trash2
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -22,11 +23,13 @@ import {
   Area
 } from 'recharts';
 import { getAllAnalyses, deleteAnalysis, SavedAnalysis } from '../services/db';
+import { getQueue, QueuedAnalysis } from '../services/offlineQueue';
 
 import ConfirmationModal from './ConfirmationModal';
 
 export default function Dashboard() {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
+  const [queue, setQueue] = useState<QueuedAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string | null }>({
@@ -36,6 +39,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
+    fetchQueue();
 
     const handleDeleted = (e: any) => {
       const deletedId = e.detail.id;
@@ -46,25 +50,52 @@ export default function Dashboard() {
       setAnalyses([]);
     };
 
+    const handleQueueUpdate = () => fetchQueue();
+    const handleSyncSuccess = () => {
+      fetchData();
+      fetchQueue();
+    };
+
     window.addEventListener('analysis-deleted', handleDeleted);
     window.addEventListener('all-analyses-deleted', handleAllDeleted);
+    window.addEventListener('offline-queue-updated', handleQueueUpdate);
+    window.addEventListener('analysis-saved', handleSyncSuccess);
+    
     return () => {
       window.removeEventListener('analysis-deleted', handleDeleted);
       window.removeEventListener('all-analyses-deleted', handleAllDeleted);
+      window.removeEventListener('offline-queue-updated', handleQueueUpdate);
+      window.removeEventListener('analysis-saved', handleSyncSuccess);
     };
   }, []);
 
   const fetchData = async () => {
-    setIsLoading(true);
     try {
       const data = await getAllAnalyses();
       setAnalyses(data);
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
-    } finally {
-      setIsLoading(false);
     }
   };
+
+  const fetchQueue = async () => {
+    try {
+      const items = await getQueue();
+      setQueue(items);
+    } catch (error) {
+      console.error("Failed to fetch queue data:", error);
+    }
+  };
+
+  useEffect(() => {
+    // Initial loading state
+    const init = async () => {
+      setIsLoading(true);
+      await Promise.all([fetchData(), fetchQueue()]);
+      setIsLoading(false);
+    };
+    init();
+  }, []);
 
   const handleDelete = async () => {
     if (!deleteModal.id) return;
@@ -159,6 +190,25 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Offline Queue Alert */}
+      {queue.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-[32px] p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4 text-center md:text-left">
+            <div className="bg-amber-100 p-4 rounded-full">
+              <RefreshCw className="w-8 h-8 text-amber-600 animate-spin-slow" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-amber-900">Fila de Espera Ativa</h3>
+              <p className="text-amber-700">Você possui {queue.length} análise{queue.length > 1 ? 's' : ''} aguardando sincronização offline.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-amber-600 uppercase tracking-widest">Sincronização Automática Ativa</span>
+            <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
+          </div>
+        </div>
+      )}
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

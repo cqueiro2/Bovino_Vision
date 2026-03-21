@@ -21,6 +21,7 @@ import { ViewMode } from './types';
 import Dashboard from './components/Dashboard';
 import ImageAnalysis from './components/ImageAnalysis';
 import History from './components/History';
+import SyncManager from './components/SyncManager';
 
 export default function App() {
   const [view, setView] = useState<ViewMode>('dashboard');
@@ -135,6 +136,7 @@ export default function App() {
 
         {/* View Content */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
+          <SyncManager />
           <AnimatePresence mode="wait">
             <motion.div
               key={view}

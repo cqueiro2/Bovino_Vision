@@ -17,11 +17,13 @@ import {
   Target,
   X,
   Download,
-  Trash2
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeBovineImage } from '../services/gemini';
 import { saveAnalysis } from '../services/db';
+import { addToQueue } from '../services/offlineQueue';
 import { BovineAnalysisResult } from '../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -35,6 +37,7 @@ export default function ImageAnalysis() {
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isVideoMode, setIsVideoMode] = useState(false);
+  const [isQueued, setIsQueued] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -51,6 +54,7 @@ export default function ImageAnalysis() {
         setError(null);
         setSaveSuccess(false);
         setIsVideoMode(false);
+        setIsQueued(false);
       };
       reader.readAsDataURL(file);
     }
@@ -67,6 +71,7 @@ export default function ImageAnalysis() {
     setImage(null);
     setResult(null);
     setError(null);
+    setIsQueued(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment' } 
@@ -123,9 +128,25 @@ export default function ImageAnalysis() {
       setResult(analysisResult);
     } catch (err) {
       console.error(err);
-      setError("Falha ao analisar a imagem. Verifique sua conexão e tente novamente.");
+      if (!navigator.onLine) {
+        setError("Você está offline. A análise inteligente requer conexão com a internet.");
+      } else {
+        setError("Falha ao analisar a imagem. Verifique sua conexão e tente novamente.");
+      }
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleQueue = async () => {
+    if (!image) return;
+    try {
+      await addToQueue(image);
+      setIsQueued(true);
+      setError(null);
+    } catch (err) {
+      console.error(err);
+      setError("Falha ao adicionar à fila de espera.");
     }
   };
 
@@ -144,7 +165,12 @@ export default function ImageAnalysis() {
       setSaveSuccess(true);
     } catch (err) {
       console.error(err);
-      setError("Falha ao salvar no banco de dados.");
+      if (!navigator.onLine) {
+        setError("Você está offline. Salvando na fila de espera...");
+        await handleQueue();
+      } else {
+        setError("Falha ao salvar no banco de dados.");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -489,6 +515,23 @@ export default function ImageAnalysis() {
                     <Target className="w-6 h-6" />
                     ANALISAR AGORA
                   </button>
+                </div>
+              )}
+              
+              {!navigator.onLine && !isAnalyzing && !isQueued && (
+                <button 
+                  onClick={handleQueue}
+                  className="bg-amber-500 text-white px-8 py-3 rounded-full font-bold text-sm shadow-xl hover:bg-amber-600 transition-all flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  SALVAR NA FILA (OFFLINE)
+                </button>
+              )}
+
+              {isQueued && (
+                <div className="bg-emerald-100 text-emerald-700 px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl border border-emerald-200">
+                  <CheckCircle2 className="w-6 h-6" />
+                  <span className="font-bold">Adicionado à Fila de Espera</span>
                 </div>
               )}
             </div>

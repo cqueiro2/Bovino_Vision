@@ -94,6 +94,8 @@
   /* Force default border and text colors to legacy formats */
   --color-border: rgba(0, 0, 0, 0.1);
   --color-text: #111827;
+
+  --animate-spin-slow: spin 3s linear infinite;
 }
 
 @layer base {

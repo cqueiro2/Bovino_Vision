@@ -53,9 +53,11 @@ export default function History() {
 
     window.addEventListener('analysis-deleted', handleDeleted);
     window.addEventListener('all-analyses-deleted', handleAllDeleted);
+    window.addEventListener('analysis-saved', fetchAnalyses);
     return () => {
       window.removeEventListener('analysis-deleted', handleDeleted);
       window.removeEventListener('all-analyses-deleted', handleAllDeleted);
+      window.removeEventListener('analysis-saved', fetchAnalyses);
     };
   }, [selectedAnalysis?.id]);
 
