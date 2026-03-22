@@ -23,8 +23,10 @@ import ImageAnalysis from './components/ImageAnalysis';
 import History from './components/History';
 import SyncManager from './components/SyncManager';
 import WhatsAppSettings from './components/WhatsAppSettings';
+import Login from './components/Login';
 
 export default function App() {
+  const [user, setUser] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>('dashboard');
   const [isSidebarOpen, setSidebarOpen] = useState(false); // Default closed on mobile
   const [isDesktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
@@ -46,6 +48,10 @@ export default function App() {
     ...(isWhatsAppEnabled ? [{ id: 'whatsapp', label: 'WhatsApp', icon: Database }] : []),
     { id: 'settings', label: 'Ajustes', icon: Settings },
   ];
+
+  if (!user) {
+    return <Login onLogin={(email) => setUser(email)} />;
+  }
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex text-[#1A1A1A] font-sans">
@@ -140,7 +146,10 @@ export default function App() {
               <CheckCircle2 className="w-4 h-4" />
               SISTEMA ONLINE
             </div>
-            <button className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center border border-gray-200 hover:bg-gray-200 transition-all">
+            <button 
+              onClick={() => setUser(null)}
+              className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center border border-gray-200 hover:bg-gray-200 transition-all"
+            >
               <User className="w-5 h-5 text-gray-600" />
             </button>
           </div>
