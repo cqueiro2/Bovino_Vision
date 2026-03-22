@@ -9,25 +9,29 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { supabase } from '../lib/supabase';
 
 interface LoginProps {
   onLogin: (email: string) => void;
 }
 
 export default function Login({ onLogin }: LoginProps) {
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const validateEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
 
     if (!email) {
       setError('O e-mail é obrigatório.');
@@ -44,13 +48,46 @@ export default function Login({ onLogin }: LoginProps) {
       return;
     }
 
+    if (password.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+
     setIsLoading(true);
     
-    // Simulating API call
-    setTimeout(() => {
+    try {
+      if (isSignUp) {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (signUpError) throw signUpError;
+
+        if (data.user && data.session) {
+          // Auto-login if confirmation is disabled
+          onLogin(data.user.email || '');
+        } else {
+          setSuccess('Conta criada! Verifique seu e-mail para confirmar o cadastro.');
+          setIsSignUp(false);
+        }
+      } else {
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (authError) throw authError;
+
+        if (data.user) {
+          onLogin(data.user.email || '');
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erro ao processar sua solicitação.');
+    } finally {
       setIsLoading(false);
-      onLogin(email);
-    }, 1500);
+    }
   };
 
   return (
@@ -70,10 +107,12 @@ export default function Login({ onLogin }: LoginProps) {
             <Activity className="text-white w-10 h-10" />
           </motion.div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight mb-2">Bovino Vision</h1>
-          <p className="text-gray-500 font-medium">Bem-vindo de volta! Entre na sua conta.</p>
+          <p className="text-gray-500 font-medium">
+            {isSignUp ? 'Crie sua conta para começar.' : 'Bem-vindo de volta! Entre na sua conta.'}
+          </p>
         </div>
 
-        {/* Login Form */}
+        {/* Login/Signup Form */}
         <div className="bg-white rounded-[40px] border border-gray-100 shadow-xl shadow-blue-50/50 p-8 md:p-10">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Input */}
@@ -117,6 +156,17 @@ export default function Login({ onLogin }: LoginProps) {
               </div>
             </div>
 
+            {/* Success Message */}
+            {success && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-4 bg-green-50 text-green-700 rounded-2xl text-sm font-bold border border-green-100"
+              >
+                {success}
+              </motion.div>
+            )}
+
             {/* Error Message */}
             {error && (
               <motion.div 
@@ -129,15 +179,17 @@ export default function Login({ onLogin }: LoginProps) {
               </motion.div>
             )}
 
-            {/* Forgot Password */}
-            <div className="text-center">
-              <button 
-                type="button"
-                className="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors"
-              >
-                Esqueci minha senha
-              </button>
-            </div>
+            {/* Forgot Password (only in login mode) */}
+            {!isSignUp && (
+              <div className="text-center">
+                <button 
+                  type="button"
+                  className="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  Esqueci minha senha
+                </button>
+              </div>
+            )}
 
             {/* Submit Button */}
             <button 
@@ -149,21 +201,28 @@ export default function Login({ onLogin }: LoginProps) {
                 <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  Entrar
+                  {isSignUp ? 'Criar Conta' : 'Entrar'}
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Create Account */}
+          {/* Toggle Login/Signup */}
           <div className="mt-8 pt-8 border-t border-gray-100 text-center">
-            <p className="text-gray-500 text-sm font-medium mb-4">Ainda não tem uma conta?</p>
+            <p className="text-gray-500 text-sm font-medium mb-4">
+              {isSignUp ? 'Já tem uma conta?' : 'Ainda não tem uma conta?'}
+            </p>
             <button 
               type="button"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError(null);
+                setSuccess(null);
+              }}
               className="w-full bg-white border-2 border-blue-600 text-blue-600 font-bold py-4 rounded-2xl hover:bg-blue-50 transition-all"
             >
-              Criar conta
+              {isSignUp ? 'Fazer Login' : 'Criar conta'}
             </button>
           </div>
         </div>

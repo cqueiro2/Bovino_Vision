@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   Camera, 
@@ -24,10 +24,28 @@ import History from './components/History';
 import SyncManager from './components/SyncManager';
 import WhatsAppSettings from './components/WhatsAppSettings';
 import Login from './components/Login';
+import { supabase } from './lib/supabase';
 
 export default function App() {
   const [user, setUser] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<ViewMode>('dashboard');
+
+  useEffect(() => {
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user?.email || null);
+      setIsLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user?.email || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const [isSidebarOpen, setSidebarOpen] = useState(false); // Default closed on mobile
   const [isDesktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
 
@@ -49,9 +67,22 @@ export default function App() {
     { id: 'settings', label: 'Ajustes', icon: Settings },
   ];
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (!user) {
     return <Login onLogin={(email) => setUser(email)} />;
   }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex text-[#1A1A1A] font-sans">
@@ -147,7 +178,7 @@ export default function App() {
               SISTEMA ONLINE
             </div>
             <button 
-              onClick={() => setUser(null)}
+              onClick={handleLogout}
               className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center border border-gray-200 hover:bg-gray-200 transition-all"
             >
               <User className="w-5 h-5 text-gray-600" />
